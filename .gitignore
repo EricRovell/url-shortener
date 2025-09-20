@@ -1,0 +1,4 @@
+.env
+venv
+shortener.db
+__pycache__
