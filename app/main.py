@@ -1,16 +1,10 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
-
-import validators
+from fastapi import FastAPI
 
 from . import schemas, models
 
 from .config import get_settings
-from .database.db import engine, get_db
-from .database import crud
+from .database.db import engine
 from starlette.datastructures import URL
-from .dependencies.exceptions import raise_bad_request, raise_not_found
 from .routers import shorten, forwards, admin
 
 def get_admin_info(db_url: models.URL) -> schemas.URLInfo:

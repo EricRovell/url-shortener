@@ -1,6 +1,5 @@
 from .. import schemas, models
 
-from . import crud
 from ..config import get_settings
 from fastapi import Request
 
