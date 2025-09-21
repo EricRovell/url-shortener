@@ -4,17 +4,14 @@ from sqlalchemy.orm import Session
 
 import validators
 
-from . import schemas, models, crud
+from . import schemas, models
+
 from .config import get_settings
-from .database import SessionLocal, engine
+from .database.db import engine, get_db
+from .database import crud
 from starlette.datastructures import URL
-
-def raise_bad_request(message):
-	raise HTTPException(status_code=400, detail=message)
-
-def raise_not_found(request):
-	message = f"URL '{request.url}' doest not exist"
-	raise HTTPException(status_code=404, detail=message)
+from .dependencies.exceptions import raise_bad_request, raise_not_found
+from .routers import shorten, forwards, admin
 
 def get_admin_info(db_url: models.URL) -> schemas.URLInfo:
 	base_url = URL(get_settings().base_url)
@@ -29,60 +26,6 @@ app = FastAPI()
 
 models.Base.metadata.create_all(bind=engine)
 
-def get_db():
-	db = SessionLocal()
-	try:
-		yield db
-	finally:
-		db.close()
-
-@app.get("/")
-def read_root():
-	return "Welcome to the URL shortener API"
-
-@app.post("/url", response_model=schemas.URLInfo)
-def create_url(url: schemas.URLBase, db: Session = Depends(get_db)):
-	"""
-	Creates a short link for a given `target_url`.
-	"""
-	if not validators.url(url.target_url):
-		raise_bad_request(message="Provided URL is not valid")
-	
-	db_url = crud.create_db_url(db=db, url=url)
-	return get_admin_info(db_url)
-
-@app.get("/{url_key}")
-def forward_to_target_url(url_key: str, request: Request, db: Session = Depends(get_db)):
-	"""
-	Forwards to the link from given `url_key`, if present.
-	"""
-	if db_url:= crud.get_db_url_by_key(db=db, url_key=url_key):
-		crud.update_db_clicks(db=db, db_url=db_url)
-		return RedirectResponse(db_url.target_url)
-	else:
-		raise_not_found(request)
-
-@app.get(
-	"/admin/{secret_key}",
-	name="administration_info",
-	response_model=schemas.URLInfo
-)
-def get_url_info(secret_key: str, request: Request, db: Session = Depends(get_db)):
-	"""
-	Returns `URLInfo` of the shortened link by it's `secret_key`.
-	"""
-	if db_url := crud.get_db_url_by_secret_key(db, secret_key=secret_key):
-		return get_admin_info(db_url)
-	else:
-		raise_not_found(request)
-
-@app.delete("/admin/{secret_key}")
-def delete_url(secret_key: str, request: Request, db: Session = Depends(get_db)):
-	"""
-	Deletes a link by it's `secret_key`.
-	"""
-	if db_url := crud.deactivate_db_url_by_secret_key(db, secret_key=secret_key):
-		message = f"Successfully deleted shortened URL for '{db_url.target_url}'"
-		return { "detail": message }
-	else:
-		raise_not_found(request)
+app.include_router(shorten.router)
+app.include_router(forwards.router)
+app.include_router(admin.router)
